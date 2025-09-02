@@ -60,4 +60,4 @@ Test Acc       : 84.18%
 
 huggingface的Github开源链接：[huggingface/pytorch-openai-transformer-lm: 🐥A PyTorch implementation of OpenAI's finetuned transformer language model with a script to import the weights pre-trained by OpenAI](https://github.com/huggingface/pytorch-openai-transformer-lm)
 
-五舟配置的开源链接：
+五舟配置的开源链接：[GPT1](https://github.com/HelloHiSay/wuzhou-pytorch-transformer-GPT1/tree/main)
