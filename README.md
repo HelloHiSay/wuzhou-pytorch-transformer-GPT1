@@ -2,6 +2,8 @@
 
 # 1 环境配置
 ## 1.1 基础环境
+将requirement.txt的环境下载
+pip install -r requirement.txt
 python == 3.8
 ftfy == 6.3.1
 numpy == 1.24.1
