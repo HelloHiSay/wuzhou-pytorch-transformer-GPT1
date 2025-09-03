@@ -1,65 +1,63 @@
-# wuzhou-pytorch-transformer-GPT1 基于Pytorch实现GPT1
+# PyTorch implementation of OpenAI's Finetuned Transformer Language Model
 
-# 1 环境配置
-## 1.1 基础环境
-将requirement.txt的环境下载
-pip install -r requirement.txt
-python == 3.8
-ftfy == 6.3.1
-numpy == 1.24.1
-pandas == 2.0.3
-scikit_learn == 1.3.2
-spacy == 3.4.4
-torch == 2.4.1+cu121
-tqdm == 4.67.1
-CUDA Version == 12.0
-![[Picture/基于Pytorch实现GPT1/8a3183172fe5a2c2511c2e6e05d5ca5c_MD5.png|375]]
+This is a PyTorch implementation of the [TensorFlow code](https://github.com/openai/finetune-transformer-lm) provided with OpenAI's paper ["Improving Language Understanding by Generative Pre-Training"](https://blog.openai.com/language-unsupervised/) by Alec Radford, Karthik Narasimhan, Tim Salimans and Ilya Sutskever.
 
-## 1.2 模型权重文件
-下载OpenAI预训练权重并吧model文件夹放入和tran.py同一级文件夹下[finetune-transformer-lm](https://github.com/openai/finetune-transformer-lm)
+This implementation comprises **a script to load in the PyTorch model the weights pre-trained by the authors** with the TensorFlow implementation.
 
-## 1.3 ROCStories 完形填空任务数据集
-[ROCStories 和故事完形填空测试](https://cs.rochester.edu/nlp/rocstories/)
-ROCStories Cloze Test 是一个阅读理解数据集，每篇“故事”由 4 句话组成（上下文），后面有两个候选结尾（ending1 和 ending2），目标是判断哪个结尾更合理
+![Transformer Language Model](assets/ftlm.png)
 
-# 2 模型结构
-n_layer = 12, n_head = 12, n_embd = 768（12层，12头，768维）与原论文一致
-![[Picture/基于Pytorch实现GPT1/741c0830cfe77cf7e0e97141bf7091a1_MD5.png]]
+The model classes and loading script are located in [model_pytorch.py](model_pytorch.py).
 
-# 3 数据处理
-datasets.py
-![[Picture/基于Pytorch实现GPT1/9b4ba989e9aa09d85b82496a388162d7_MD5.png]]
-datasets.py文件下_rocstories返回四个参数分别对应故事上下文，第一个候选结尾，第二个候选结尾，存储标签
+The names of the modules in the PyTorch model follow the names of the Variable in the TensorFlow implementation. This implementation tries to follow the original code as closely as possible to minimize the discrepancies.
 
-rocstories进行验证集训练集测试集的划分，并返回四个元组
-(trX1, trX2, trX3, trY)训练集：故事上下文、候选结尾1、候选结尾2、标签
-(vaX1, vaX2, vaX3, vaY)验证集：故事上下文、候选结尾1、候选结尾2、标签
-(teX1, teX2, teX3)测试集：故事上下文、候选结尾1、候选结尾2（无标签）
+This implementation thus also comprises a modified Adam optimization algorithm as used in OpenAI's paper with:
+- fixed weights decay following the work of [Loshchilov et al.](https://arxiv.org/abs/1711.05101), and
+- scheduled learning rate as [commonly used for Transformers](http://nlp.seas.harvard.edu/2018/04/03/attention.html#optimizer).
 
-# 4 训练策略和方法
-任务目标：ROCStories 任务是给一个故事开头x<sub>1</sub>，两个候选结尾x<sub>2</sub>、x<sub>3</sub>，选择合理的结尾
+## Requirements
+To use the model it-self by importing [model_pytorch.py](model_pytorch.py), you just need:
+- PyTorch (version >=0.4)
 
-AI总结：该训练方法基于GPT模型迁移学习，采用语言建模+分类联合损失，配合AdmW优化、warmup调度、梯度裁剪和dropout正则化，通过验证集选择最优模型，最终实现ROCStories 多选任务的准确预测
+To run the classifier training script in [train.py](train.py) you will need in addition:
+- tqdm
+- sklearn
+- spacy
+- ftfy
+- pandas
 
+You can download the weights of the OpenAI pre-trained version by cloning [Alec Radford's repo](https://github.com/openai/finetune-transformer-lm) and placing the `model` folder containing the pre-trained weights in the present repo.
 
-# 5 结果
-通过一下命令来复现
+## Using the pre-trained model as a Transformer Language Model
+The model can be used as a transformer language model with OpenAI's pre-trained weights as follow:
+```python
+from model_pytorch import TransformerModel, load_openai_pretrained_model, DEFAULT_CONFIG
+
+args = DEFAULT_CONFIG
+model = TransformerModel(args)
+load_openai_pretrained_model(model)
 ```
+
+This model generates Transformer's hidden states. You can use the `LMHead` class in [model_pytorch.py](model_pytorch.py) to add a decoder tied with the weights of the encoder and get a full language model. You can also use the `ClfHead` class in [model_pytorch.py](model_pytorch.py) to add a classifier on top of the transformer and get a classifier as described in OpenAI's publication. (see an example of both in the `__main__` function of [train.py](train.py))
+
+To use the positional encoder of the transformer, you should encode your dataset using the `encode_dataset()` function of [utils.py](utils.py). Please refer to the beginning of the `__main__` function in [train.py](train.py) to see how to properly define the vocabulary and encode your dataset.
+
+## Fine-tuning the pre-trained model on a classification task
+This model can also be integrated in a classifier as detailed in [OpenAI's paper](https://blog.openai.com/language-unsupervised/). An example of fine-tuning on the ROCStories Cloze task is included with the training code in [train.py](train.py)
+
+The ROCStories dataset can be downloaded from the associated [website](http://cs.rochester.edu/nlp/rocstories/).
+
+As with the [TensorFlow code](https://github.com/openai/finetune-transformer-lm), this code implements the ROCStories Cloze Test result reported in the paper which can be reproduced by running:
+
+```bash
 python -m spacy download en
-
-python train.py --dataset rocstories --desc rocstories --submit --analysis --data_dir ./data/ROCStories/ --n_gpu 8
+python train.py --dataset rocstories --desc rocstories --submit --analysis --data_dir [path to data here]
 ```
 
-![[Picture/基于Pytorch实现GPT1/4cfd26c1f05c427cd65398208c276635_MD5.png]]
+#### First experiments on the ROCStories test set
+Finetuning the PyTorch model for 3 Epochs on ROCStories takes 10 minutes to run on a single NVidia K-80.
 
-epoch 0  : 74.87% (train)  74.06% (valid)
-epoch 1  : 86.90%          83.42%
-epoch 2  : 92.51%          87.43%
-Best Valid Acc : 87.43%
-Test Acc       : 84.18%
-原论文故事完形填空数据集有86.5%的准确率与这次复现的准确率比较贴近
-![[Picture/基于Pytorch实现GPT1/467347c4916fc43cddb06861e7d2aeb2_MD5.png]]
+The single run test accuracy of this PyTorch version is 85.84%, while the authors reports a median accuracy with the TensorFlow code of 85.8% and the paper reports a best single run accuracy of 86.5%.
 
-huggingface的Github开源链接：[huggingface/pytorch-openai-transformer-lm: 🐥A PyTorch implementation of OpenAI's finetuned transformer language model with a script to import the weights pre-trained by OpenAI](https://github.com/huggingface/pytorch-openai-transformer-lm)
+The authors implementations uses 8 GPU and can thus accomodate a batch of 64 samples while the present implementation is single GPU and is in consequence limited to 20 instances on a K80 for memory reasons. In our test, increasing the batch size from 8 to 20 samples increased the test accuracy by 2.5 points. A better accuracy may be obtained by using a multi-GPU setting (not tried yet).
 
-五舟配置的开源链接：[GPT1](https://github.com/HelloHiSay/wuzhou-pytorch-transformer-GPT1/tree/main)
+The previous SOTA on the ROCStories dataset is 77.6% ("Hidden Coherence Model" of Chaturvedi et al. published in "Story Comprehension for Predicting What Happens Next" EMNLP 2017, which is a very nice paper too!)
